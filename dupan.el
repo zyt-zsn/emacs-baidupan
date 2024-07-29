@@ -140,16 +140,43 @@
                                    (let ((res (json-read)))
                                      (dupan-info "RESPONSE: %s" res)
                                      (dupan-ensure-results res))))
-                        (kill-buffer)))))
+                        ;; (kill-buffer)
+						))))
     (dupan-info "[%s]: %s, data: %s" url-request-method url
                 (if (string-match-p "method=upload" url) "[octet form-data]" url-request-data))
     (if callback ; async | sync
-        (url-retrieve url (lambda (_status buf)
-                            (let ((r (funcall parse-resp)))
-                              (when (buffer-live-p buf)
-                                (with-current-buffer buf
-                                  (funcall callback r)))))
-                      (list (current-buffer)) t)
+		(if nil
+			(let* (
+				   (buf (url-retrieve-synchronously url))
+				   (r (with-current-buffer buf
+						(json-read)))
+				   )
+			  (progn
+				(message (format "buf --> %s" buf))
+				(prin1 callback)
+				(when t;;(buffer-live-p buf)
+				  (with-current-buffer buf
+					;; (with-temp-buffer
+					(prin1 "r:")
+					(prin1 r)
+					(funcall callback r))
+				  )
+				)		  
+			  )
+          (url-retrieve url (lambda (_status buf)
+                              (let ((r (funcall parse-resp)))
+								(message (format "buf --> %s" buf))
+								(prin1 callback)
+								(when t;;(buffer-live-p buf)
+								  ;; (with-current-buffer buf
+								  (with-current-buffer dupan-current-directory-buf
+									;; (with-temp-buffer
+									(funcall callback r))
+								  )
+								)
+							  )
+						(list (current-buffer)) t)
+		  )
       (with-current-buffer (url-retrieve-synchronously url t)
         (funcall parse-resp)))))
 
@@ -236,9 +263,88 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
         (push file dupan--local-files)
         (setq ret file)))
     ret))
+(defvar dupan--file-meta-cache nil)
+
+(defun dupan-fetch-multi-files-meta (path-fs_id-alist &optional renew)
+  (let* (
+		 ret
+		 path-list
+		 fs-id-list
+		 )
+	(--map (progn
+			 (push (car it) path-list)
+			 (push (cdr it) fs-id-list)
+			 )
+		   path-fs_id-alist)
+	;; (unless renew
+	;;   (setq ret (alist-get path dupan--file-meta-cache nil nil 'string=)))
+	(when (or renew (null ret))
+	  ;; (assoc-delete-all path dupan--file-meta-cache)
+	  (setq ret 
+			(dupan-req 'meta fs-id-list))
+	  (--map
+	   (push (cons (alist-get 'path it) it)  dupan--file-meta-cache)
+	   ret
+	   )
+	  )
+	ret
+	)  
+  )
+
+(defun dupan-fetch-file-meta (path fs_id &optional renew)
+  (let* (
+		 ret
+		 )
+	(unless renew
+	  (setq ret (alist-get path dupan--file-meta-cache nil nil 'string=)))
+	(when (or renew (null ret))
+	  (assoc-delete-all path dupan--file-meta-cache)
+	  (setq ret 
+			(dupan-req 'meta fs_id))
+	  (push (cons path ret) dupan--file-meta-cache)
+	  )
+	ret
+	)  
+  )
+
+(defvar dupan--child-list-cache nil)
+(defun dupan--list-child-with-cache (directory &optional renew)
+  (unless (s-ends-with? "/" directory)
+	(setq directory (concat directory "/")))
+  (let (ret child_list path-fs-id-list)
+	(unless renew
+	  (setq ret (alist-get directory dupan--child-list-cache nil nil 'string=)))
+	(when (or renew (null ret))
+	  (assoc-delete-all directory dupan--child-list-cache)
+	  (setq child_list (dupan-req 'list (dupan-normalize directory) nil))
+	  (setq ret 
+			(--map (progn
+					 (push (cons (alist-get 'path it) (alist-get 'fs_id it)) path-fs-id-list)
+					 (add-to-list 'dupan-fsid-cache (cons (alist-get 'path it) (alist-get 'fs_id it)))
+					 (concat dupan-prefix (alist-get 'path it))
+					 )
+				   child_list
+				   ))
+	  (push (cons directory ret)  dupan--child-list-cache)
+	  (dupan-fetch-multi-files-meta path-fs-id-list)
+	  )
+	ret
+	)
+  )
+
+(defvar dupan-fsid-cache nil)
+(defvar dupan-current-directory-buf nil)
 
 (defvar dupan--ttl-cache nil "全局缓存，可保持数据存活若干时间。主要用来缓解 31034 号错误太多的问题。")
 (defvar dupan--ttl-time 8 "默认存活 8 秒")
+
+(defun dupan-reset()
+  (setq dupan-fsid-cache nil)
+  (setq dupan-current-directory-buf nil)
+  (setq dupan--file-meta-cache nil)
+  (setq dupan--child-list-cache nil)
+  (setq dupan--ttl-cache nil)
+  )
 
 (defun dupan-set-ttl-cache (key value)
   (setq dupan--ttl-cache (assoc-delete-all key dupan--ttl-cache))
@@ -383,11 +489,17 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 
 (cl-defmethod dupan-req :around (func &rest args)
   (dupan-info "正请求 %s %s..." func args)
-  (dupan-get-token)
-  (cond ((eql func 'finfo)
-         (dupan-with-ttl-cache (concat "finfo:" (car args))
-           (cl-call-next-method)))
-        (t (apply #'cl-call-next-method func args))))
+  (unless (equal func 'search)
+	;; (message "sleep 1 s")
+	;; (sleep-for 1)
+	(dupan-get-token)
+	(cond
+	 (
+	  (eql func 'finfo)
+      (dupan-with-ttl-cache (concat "finfo:" (car args))
+		(cl-call-next-method)))
+     (t (apply #'cl-call-next-method func args))))
+  )
 
 (cl-defmethod dupan-req ((_ (eql 'uinfo)))
   (dupan-make-request (dupan-make-url 'nas :method 'uinfo)))
@@ -431,10 +543,21 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
       '((isdir . 1))
     (let* ((dir (file-name-directory path))
            (name (file-name-nondirectory path))
-           (rs (dupan-req 'search (substring name nil (min (length name) 18)) dir t))
+           ;; (rs (dupan-req 'search (substring name nil (min (length name) 18)) dir t))
+		   ;; (rs (dupan-req 'meta (alist-get 'fs_id (dupan--find-with-cache path))))
+		   ;; (rs (dupan-req 'meta (alist-get path dupan-fsid-cache nil nil 'equal)))
+		   (rs (list (dupan-fetch-file-meta path
+											(or (alist-get path dupan-fsid-cache nil nil 'equal)
+												(progn
+												  (dupan-handle:directory-files
+												   (dupan-handle:file-name-directory (concat dupan-prefix path)))
+												  (alist-get path dupan-fsid-cache nil nil 'equal)
+												  ))
+											)))
            (file (cl-find-if (lambda (f) (string= (alist-get 'path f) path)) rs)))
       (when (and dlink? file (equal (alist-get 'isdir file) 0))
         (when-let ((meta (dupan-req 'meta (alist-get 'fs_id file))))
+		  ;; (when-let ((meta (dupan-fetch-file-meta file (alist-get 'fs_id file))))
           (setf (alist-get 'dlink file) (alist-get 'dlink (car meta)))))
       file)))
 
@@ -521,7 +644,8 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
            for data = (dupan-make-multipart-body raw to)
            for headers = `(("Content-Type" . ,(concat "multipart/form-data; boundary=" (cdr data))))
            collect (progn (when (> (length ps) 1)
-                            (message "正在上传第 %s/%s 个分片..." (+ i 1) (length ps)))
+                            (message "正在上传第 %s/%s 个分片..." (+ i 1) (length ps))
+							)
                           (dupan-make-request url :data (car data) :headers headers))))
 
 (cl-defmethod dupan-req ((_ (eql 'upload)) from to &optional overridep)
@@ -571,6 +695,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 ;;; Handler
 
 (defun dupan-handler (operation &rest args)
+  ;; (message (format "dupan-handle:%s" operation))
   (let ((handler (intern (format "dupan-handle:%s" operation))))
     (if (fboundp handler)
         (apply handler args)
@@ -593,6 +718,10 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
         ((string-match-p "~/" filename) nil)
         ((string-match-p "[/.]tags$" filename) nil) ; citre
         (t (dupan--find-with-cache filename nocache))))
+(defun dupan-handle:file-notify-add-watch (filename flags callback)
+  t
+  )
+
 
 (defun dupan-handle:file-readable-p (filename)
   ;; 有些插件对这种 tramp 方式的文件访问支持不够好，为避免问题，暂时硬核打补丁
@@ -644,6 +773,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 (defun dupan-handle:delete-file (filename &optional _trash)
   (setq filename (dupan-normalize filename))
   (dupan-req 'delete filename)
+  (dupan-set-ttl-cache (concat "finfo:" filename) nil)
   (sleep-for dupan-sleep-ticks))
 
 (defun dupan-handle:delete-directory (directory &optional _recursive _trash)
@@ -736,7 +866,8 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
   "Async, so make `directory-files' return nil, and loading here."
   (dupan-info "[handler] insert-directory: %s" filename)
   (setq filename (expand-file-name filename))
-
+  (unless (string= (buffer-name) " *temp*")
+	(setq dupan-current-directory-buf (current-buffer)))
   (if (not full-directory-p)
       (let* ((attrs (file-attributes filename))
              (a (format "  %s %2d %2s %2s %8s %s "
@@ -747,7 +878,8 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
                   (insert (file-name-nondirectory (directory-file-name filename)) "\n")
                   (put-text-property (point-min) (- (point-max) 1) 'dired-filename t)
                   (buffer-string))))
-        (goto-char (point-max))
+        ;; (goto-char (point-max))
+		(goto-char (1+ (point-at-eol)))
         (with-silent-modifications
           (insert a) (save-excursion (insert s))))
 
@@ -763,25 +895,50 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
                         (file-size-human-readable total)
                         (/ (* used 100.0) total)))))
     (dupan-req 'list (dupan-normalize filename)
-      (lambda (res)
-        ;; files
-        (setq-local dupan--local-files
-                    (cl-loop for f in res
-                             for isdir = (equal (alist-get 'isdir f) 1)
-                             if isdir collect f into ds
-                             else collect f into fs
-                             finally return (append ds fs)))
-        (cl-loop for f in dupan--local-files
-                 do (save-excursion
-                      (insert-directory (dupan-normalize (alist-get 'path f) t) nil)))
-        ;; progress
-        (save-excursion
-          (goto-char (point-min))
-          (re-search-forward "used)" nil t)
-          (with-silent-modifications
-            (delete-region (point) (line-end-position))
-            (insert (format ", loaded success."))
-            (message (if dupan--local-files "加载完成。" "文件夹下无内容。"))))))))
+			   (lambda (res)
+				 ;; files
+				 (let* ((child_list 
+						 (--map (progn
+								  (add-to-list 'dupan-fsid-cache (cons (alist-get 'path it) (alist-get 'fs_id it)))
+								  (concat dupan-prefix (alist-get 'path it))
+								  )
+								res)))
+				   (push (cons filename child_list)  dupan--child-list-cache))
+				 (setq-local dupan--local-files
+							 (cl-loop for f in res
+									  do (progn
+										   ;; (print (format "add fsid of %s" (alist-get 'path f)))
+										   (add-to-list 'dupan-fsid-cache (cons (alist-get 'path f) (alist-get 'fs_id f)))
+										   ;; 如希望快速响应，则关闭下面语句;改为空闲时间获取finfo
+										   ;; (dupan--find-with-cache (alist-get 'path f))
+										   )
+									  for isdir = (equal (alist-get 'isdir f) 1)
+									  if isdir collect f into ds
+									  else collect f into fs
+									  finally return (append ds fs)))
+				 (cl-loop for f in dupan--local-files
+						  do (save-excursion
+							   ;; (setq item_cnt (1+ item_cnt))
+							   (insert-directory (dupan-normalize (alist-get 'path f) t) nil)))
+
+				 ;; progress
+				 (save-excursion
+				   (read-only-mode -1)
+				   (forward-line (1+ (length dupan--local-files)))
+				   ;; 根据 dired-subtree-insert 如下逻辑修改,删除 dired-subtree-insert 增加的一行
+				   ;; (save-excursion
+				   ;; (insert listing)
+				   ;; (setq end (+ (point) 2)))
+				   (delete-line)
+				   (read-only-mode 1)
+				   (goto-char (point-min))
+				   (re-search-forward "used)" nil t)
+				   (with-silent-modifications
+					 (delete-region (point) (line-end-position))
+					 ;; (insert (format ", loaded success."))
+					 (message (if dupan--local-files "加载完成。" "文件夹下无内容。"))))
+				 (dupan-fetch-multi-files-meta (--map (cons (alist-get 'path it) (alist-get 'fs_id it)) res))
+				 ))))
 
 (defun dupan-handle:insert-file-contents (filename &optional visit _beg _end replace)
   (dupan-info "[handler] insert-file-contents: %s" filename)
@@ -876,7 +1033,11 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 
 (defun dupan-handle:file-writable-p (_) t)
 (defun dupan-handle:file-owner-preserved-p (_) t)
-(defun dupan-handle:directory-files (&rest _) nil)
+(defun dupan-handle:directory-files(DIRECTORY &optional FULL MATCH NOSORT COUNT)
+  ;; (--map (concat dupan-prefix (alist-get 'path it))
+  ;; 		 (dupan-req 'list (dupan-normalize DIRECTORY) nil))
+  (dupan--list-child-with-cache DIRECTORY nil)
+  )
 (defun dupan-handle:make-symbolic-link (&rest _) nil)
 (defun dupan-handle:add-name-to-file (&rest _) nil)
 (defun dupan-handle:dired-compress-file (&rest _) nil)
@@ -1052,7 +1213,94 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 
 (add-to-list 'file-name-handler-alist
              `(,(concat "\\`" dupan-prefix) . dupan-handler))
+(add-to-list 'file-name-handler-alist
+			 `(,(concat "\\`" dupan-prefix) . dupan-handler))
+(with-eval-after-load 'tramp (add-to-list 'treemacs--file-name-handler-alist
+										  `(,(concat "\\`" dupan-prefix) . dupan-handler)))
+(defun expand-file-name-advice (orig &rest args)
+  (let* (
+		 (ret (apply orig args))
+		 split-list
+		 )
+	(when (and (= 2 (length args)) (s-starts-with? dupan-prefix (nth 1 args)))
+	  (setq split-list (split-string ret dupan-prefix))
+	  (if (> (length split-list) 1)
+		  (setq ret (concat dupan-prefix (nth 1 split-list)))
+		(setq ret dupan-prefix)
+		)
+	  )
+	ret
+	)
+  )
+
+
+(defun expand-file-name-advice (orig &rest args)
+  (let* (
+		 (ret (apply orig args))
+		 split-list
+		 )
+	(when (and (= 2 (length args))
+			   (s-starts-with? dupan-prefix (nth 1 args))
+			   (null (or (s-starts-with? "d:" (nth 0 args) t)
+						 (s-starts-with? "c:" (nth 0 args) t)
+						 (s-starts-with? "/" (nth 0 args) t)
+						 (s-starts-with? "~/" (nth 0 args) t)
+						 ))
+			   )
+	  (setq ret (dupan-fix ret args))
+	  )
+	ret
+	)
+  )
+(defun dupan-fix(path &rest args)
+  (setq split-list (split-string path dupan-prefix))
+  (if (> (length split-list) 1)
+	  (concat dupan-prefix (nth 1 split-list))
+	dupan-prefix
+	)  
+  )
+;;避免删除网盘文件或projectile-mode自动查找project-root路径时，检查多个projectile默认文件是否存在，导致多次无谓的(网络访问)文件信息查询
+(defun dupan-projectile-project-root-fix(orig &optional dir)
+  ;; ~projectile-project-root~被调用时可能会不指定dir参数(函数内部使用 (or dir default-directory)) 
+  (let ((dir (or dir default-directory)))
+	(if (null (s-starts-with? dupan-prefix dir))
+		(funcall orig dir)
+	  )
+	)
+  )
+(with-eval-after-load 'projectile
+  (advice-add
+   'projectile-project-root
+   :around
+   'dupan-projectile-project-root-fix)
+  )
+
+(with-eval-after-load 'treemacs-core-utils
+  ;; (advice-add 'treemacs-join-path
+  ;; 			  :around
+  ;; 			  (lambda(orig &rest args)
+  ;; 				(declare (side-effect-free t))
+  ;; 				(if (s-starts-with? dupan-prefix (car items))
+  ;; 					(concat (car items) (--reduce-from (concat acc "/" it)   "" (cdr items)))
+  ;; 				  (apply orig args)
+  ;; 				  )))
+  (defun treemacs-join-path (&rest items)
+	"Join the given ITEMS to a single file PATH."
+	(declare (side-effect-free t))
+	(if (s-starts-with? "/dp:" (car items))
+		(concat (car items) (--reduce-from (concat acc "/" it)   "" (cdr items)))
+	  (--reduce-from (expand-file-name it acc) "/" items)))
+  ;; (advice-add
+  ;;  'expand-file-name
+  ;;  :around
+  ;;  'expand-file-name-advice
+  ;;  )
+  )
+
 
 (provide 'dupan)
 
 ;;; dupan.el ends here
+;;;zyt
+;; (alist-get 'server_filename (nth (1- (length dupan--local-files)) dupan--local-files))
+;; (alist-get 'fs_id (nth (1- (length dupan--local-files)) dupan--local-files))
