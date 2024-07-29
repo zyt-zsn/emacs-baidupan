@@ -31,6 +31,7 @@
 (require 'cl-lib)
 (require 'url-http)
 (require 'dired-aux)
+(require 'dash)
 
 (eval-when-compile
   (defvar url-http-end-of-headers)
