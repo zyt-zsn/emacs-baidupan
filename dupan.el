@@ -944,14 +944,18 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 (defun dupan-handle:insert-file-contents (filename &optional visit _beg _end replace)
   (dupan-info "[handler] insert-file-contents: %s" filename)
   (condition-case err
-      (let ((count 0))
+      (let ((count 0) nf)
         (when (file-exists-p filename)
-          (let ((nf (file-local-copy filename)))
-            (unwind-protect
-                (save-excursion
-                  (if replace (erase-buffer))
-                  (setq count (cdr (insert-file-contents nf nil nil nil t))))
-              (delete-file nf))))
+		  (setq nf (file-local-copy filename))
+          (unwind-protect
+              (save-excursion
+                (if replace (erase-buffer))
+                (setq count (cdr (insert-file-contents nf nil nil nil t))))
+            ;; (delete-file nf)
+			nil
+			)
+										;)
+		  )
         (when visit
           (setf buffer-file-name filename)
           (setf buffer-read-only (not (file-writable-p filename)))
@@ -984,11 +988,16 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
     (let ((finfo (dupan-req 'finfo name t)))
       (if (file-exists-p filename)
           (let ((dlink (alist-get 'dlink finfo))
-                (newname (concat temporary-file-directory
-                                 (make-temp-name (file-name-nondirectory name))
-                                 "." (file-name-extension name))))
-            (dupan-req 'download dlink newname)
-            newname)
+                (local-temp-file-name (concat temporary-file-directory (file-name-nondirectory name))))
+			(unless (and
+					 (file-exists-p local-temp-file-name)
+					 (=
+					  (file-attribute-size (file-attributes local-temp-file-name))
+					  (file-attribute-size (file-attributes filename))
+					  ))
+              (dupan-req 'download dlink local-temp-file-name)
+			  )
+            local-temp-file-name)
         (user-error "要复制的文件 %s 不存在" filename)))))
 
 (defun dupan-handle:dired-insert-directory (dir switches &optional file-list wildcard _hdr)
@@ -1291,11 +1300,11 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 	(if (s-starts-with? "/dp:" (car items))
 		(concat (car items) (--reduce-from (concat acc "/" it)   "" (cdr items)))
 	  (--reduce-from (expand-file-name it acc) "/" items)))
-  ;; (advice-add
-  ;;  'expand-file-name
-  ;;  :around
-  ;;  'expand-file-name-advice
-  ;;  )
+  (advice-add
+   'expand-file-name
+   :around
+   'expand-file-name-advice
+   )
   )
 
 
