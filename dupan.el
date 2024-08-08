@@ -950,7 +950,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
           (unwind-protect
               (save-excursion
                 (if replace (erase-buffer))
-                (setq count (cdr (insert-file-contents nf nil nil nil t))))
+                (setq count (cdr (insert-file-contents nf nil _beg _end t))))
             ;; (delete-file nf)
 			nil
 			)
