@@ -995,6 +995,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 					  (file-attribute-size (file-attributes local-temp-file-name))
 					  (file-attribute-size (file-attributes filename))
 					  ))
+			  (delete-file local-temp-file-name)
               (dupan-req 'download dlink local-temp-file-name)
 			  )
             local-temp-file-name)
