@@ -32,6 +32,7 @@
 (require 'url-http)
 (require 'dired-aux)
 (require 'dash)
+(require 'treemacs)
 
 (eval-when-compile
   (defvar url-http-end-of-headers)
