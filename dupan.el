@@ -1224,8 +1224,6 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
     (browse-url (concat url (url-hexify-string path)))))
 
 (add-to-list 'file-name-handler-alist
-             `(,(concat "\\`" dupan-prefix) . dupan-handler))
-(add-to-list 'file-name-handler-alist
 			 `(,(concat "\\`" dupan-prefix) . dupan-handler))
 (with-eval-after-load 'tramp (add-to-list 'treemacs--file-name-handler-alist
 										  `(,(concat "\\`" dupan-prefix) . dupan-handler)))
