@@ -1902,3 +1902,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 	)
   (find-file "c:/Users/zyt_x/AppData/Local/Temp/Melody_Gold_Up.c@202691")
   )
+
+;; Local Variables:
+;; coding: utf-8-unix
+;; End:
