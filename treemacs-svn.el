@@ -1742,13 +1742,16 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 		   )
 	   (insert (propertize (concat "Revision:"  revision)
 						   'face 'svn-revision-face
-						   'keymap (let ((map (make-sparse-keymap)))
-									 (define-key map (kbd "RET")
-												 (lambda()
+						   'help-echo "Click left mouse button or press Enter to show files changed in this revision"
+						   'keymap (let (
+										 (map (make-sparse-keymap))
+										 (action (lambda()
 												   (interactive)
 												   (zyt/svn-server--show-log-path it (concat url "@" revision))
-												   )
-												 )
+												   ))
+										 )
+									 (define-key map (kbd "<down-mouse-1>") action)
+									 (define-key map (kbd "RET") action)
 									 map
 									 )
 						   ))
