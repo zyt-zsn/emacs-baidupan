@@ -186,7 +186,7 @@
   (let ((errno (alist-get 'errno json)))
     (if (or (null errno) (equal errno 0)) json
       (user-error
-       (if-let ((errmsg (alist-get errno dupan--errors)))
+       (if-let* ((errmsg (alist-get errno dupan--errors)))
            (format "[%s] %s" errno errmsg)
          (let ((msg (alist-get 'errmsg json)))
            (concat (format "未知错误: %s" errno)
@@ -261,7 +261,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
     (when (or renew (null ret))
       (setq dupan--local-files
             (cl-remove-if (lambda (f) (string= (alist-get 'path f) filename)) dupan--local-files))
-      (when-let ((file (dupan-req 'finfo filename)))
+      (when-let* ((file (dupan-req 'finfo filename)))
         (push file dupan--local-files)
         (setq ret file)))
     ret))
@@ -395,7 +395,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 详情阅读百度开放平台的相关文档。你是否已经搞掂且要继续？"))
       (when (y-or-n-p help)
         (let ((id (read-string "请输入您的 [AppKey]: ")))
-          (when-let ((acc (cl-find-if (lambda (a) (string= (alist-get 'id a) id)) dupan--config)))
+          (when-let* ((acc (cl-find-if (lambda (a) (string= (alist-get 'id a) id)) dupan--config)))
             (user-error "要添加的帐号已存在，请确认是否搞错！ %s : %s" (alist-get 'name acc) id))
           (let ((secret   (read-string "请输入您的 [SecretKey]: "))
                 (redirect (read-string "请输入您的 [回调页面]: ")))
@@ -857,7 +857,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
   (dupan-info "[handler] file-attributes: %s" filename)
   (setq filename (dupan-normalize filename))
   (let* ((finfo (dupan--find-with-cache filename))
-         (date (if-let ((time (alist-get 'server_mtime finfo))) (time-convert time) (date-to-time "Mon, 01 Jan 0000 00:00:00 +0000")))
+         (date (if-let* ((time (alist-get 'server_mtime finfo))) (time-convert time) (date-to-time "Mon, 01 Jan 0000 00:00:00 +0000")))
          (folder (equal (alist-get 'isdir finfo) 1))
          (size (or (alist-get 'size finfo) 0))
          (perm (concat (if folder "d" "-") "rwxr-xr--")))
@@ -1023,7 +1023,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
         (delete-file localfile)))))
 
 (defun dupan-handle:process-file (program &optional _infile _buffer _display &rest args)
-  (when-let ((name (and (equal program "file") (equal (car args) "--") (cadr args))))
+  (when-let* ((name (and (equal program "file") (equal (car args) "--") (cadr args))))
     (let ((file (dupan-normalize (expand-file-name name)))
           (repeat (equal last-command 'dired-show-file-type)))
       (unless repeat

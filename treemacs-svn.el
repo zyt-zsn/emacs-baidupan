@@ -211,7 +211,7 @@
   (let ((errno (alist-get 'errno json)))
     (if (or (null errno) (equal errno 0)) json
       (user-error
-       (if-let ((errmsg (alist-get errno svn--errors)))
+       (if-let* ((errmsg (alist-get errno svn--errors)))
            (format "[%s] %s" errno errmsg)
          (let ((msg (alist-get 'errmsg json)))
            (concat (format "未知错误: %s" errno)
@@ -305,7 +305,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
     (when (or renew (null ret))
       (setq svn--local-files
             (cl-remove-if (lambda (f) (string= (alist-get 'path f) filename)) svn--local-files))
-      (when-let ((file (svn-req 'finfo filename)))
+      (when-let* ((file (svn-req 'finfo filename)))
         (push file svn--local-files)
         (setq ret file)))
     ret))
@@ -487,7 +487,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 详情阅读百度开放平台的相关文档。你是否已经搞掂且要继续？"))
       (when (y-or-n-p help)
         (let ((id (read-string "请输入您的 [AppKey]: ")))
-          (when-let ((acc (cl-find-if (lambda (a) (string= (alist-get 'id a) id)) svn--config)))
+          (when-let* ((acc (cl-find-if (lambda (a) (string= (alist-get 'id a) id)) svn--config)))
             (user-error "要添加的帐号已存在，请确认是否搞错！ %s : %s" (alist-get 'name acc) id))
           (let ((secret   (read-string "请输入您的 [SecretKey]: "))
                 (redirect (read-string "请输入您的 [回调页面]: ")))
@@ -644,7 +644,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 											)))
            (file (cl-find-if (lambda (f) (string= (alist-get 'path f) path)) rs)))
       (when (and dlink? file (equal (alist-get 'isdir file) 0))
-        (when-let ((meta (svn-req 'meta (alist-get 'fs_id file))))
+        (when-let* ((meta (svn-req 'meta (alist-get 'fs_id file))))
 		  ;; (when-let ((meta (svn-fetch-file-meta file (alist-get 'fs_id file))))
           (setf (alist-get 'dlink file) (alist-get 'dlink (car meta)))))
       file)))
@@ -949,7 +949,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 		 ;; (finfo (svn--find-with-cache filename))
 		 (finfo (svn-fetch-file-meta filename))
          ;; (date (if-let ((time (alist-get 'server_mtime finfo))) (time-convert time) (date-to-time "Mon, 01 Jan 0000 00:00:00 +0000")))
-         (date (if-let ((time (nth 0 (dom-by-tag finfo 'date)))) (date-to-time (dom-text time)) (date-to-time "Mon, 01 Jan 0000 00:00:00 +0000")))
+         (date (if-let* ((time (nth 0 (dom-by-tag finfo 'date)))) (date-to-time (dom-text time)) (date-to-time "Mon, 01 Jan 0000 00:00:00 +0000")))
 		 ;; (equal (dom-attr (nth 0 (dom-by-tag finfo 'entry)) 'kind) "dir")
          ;; (folder (equal (alist-get 'isdir finfo) 1))
          (folder (equal (dom-attr (nth 0 (dom-by-tag finfo 'entry)) 'kind) "dir"))
@@ -1203,7 +1203,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
         (delete-file localfile)))))
 
 (defun svn-handle:process-file (program &optional _infile _buffer _display &rest args)
-  (when-let ((name (and (equal program "file") (equal (car args) "--") (cadr args))))
+  (when-let* ((name (and (equal program "file") (equal (car args) "--") (cadr args))))
     (let ((file (svn-normalize (expand-file-name name)))
           (repeat (equal last-command 'dired-show-file-type)))
       (unless repeat
