@@ -38,6 +38,8 @@
   (defvar url-http-content-type)
   (defvar url-http-response-status))
 
+(defvar svn-log-ignored-ops nil)
+(defvar svn-log-io nil)
 (defgroup svn nil
   "snv服务器访问客户端。"
   :prefix "svn-"
@@ -385,7 +387,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 
 (defvar svn--child-list-cache nil)
 
-(defun svn--list-child-with-cache (directory &optional renew)
+(defun svn--list-child-with-cache (directory &optional renew match)
   (unless (s-ends-with? "/" directory)
 	(setq directory (concat directory "/")))
   (let (ret child_list path-fs-id-list)
@@ -422,6 +424,9 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 			   ))
 		(push (cons directory ret)  svn--child-list-cache)
 		)
+	  )
+	(if match
+		(setq ret (--keep (string-match match (file-name-nondirectory it)) ret))
 	  )
 	ret
 	)
@@ -786,7 +791,8 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 ;;; Handler
 
 (defun svn-handler (operation &rest args)
-  ;; (message (format "svn-handle:%s" operation))
+  (unless (or (not svn-log-io) (member operation svn-log-ignored-ops))
+	(message "svn-handler: %s  <-> %s" operation args))
   (unless (or
 		   (string= operation "file-remote-p")
 		   (string= operation "expand-file-name")
@@ -799,6 +805,8 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
       (svn-run-real-handler operation args))))
 
 (defun svn-run-real-handler (operation args)
+  (unless (or (not svn-log-io) (member operation svn-log-ignored-ops))
+	(message "svn-run-real-handler: %s  <-> %s" operation args))
   (let* (
 		 ;; (inhibit-file-name-handlers `(svn-handler
          ;;                               ;; tramp-file-name-handler
@@ -1225,10 +1233,14 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 
 (defun svn-handle:file-writable-p (_) t)
 (defun svn-handle:file-owner-preserved-p (_) t)
-(defun svn-handle:directory-files(DIRECTORY &optional FULL MATCH NOSORT COUNT)
+(defun svn-handle:directory-files(directory &optional full match nosort count)
   ;; (--map (concat svn-prefix (alist-get 'path it))
   ;; 		 (svn-req 'list (svn-normalize DIRECTORY) nil))
-  (svn--list-child-with-cache DIRECTORY nil)
+
+  ;; lisp/dired.el added newline checking on file name in commit(Bug:abde2d1ed3bb)
+  ;; and -b support will be checked via the 'ls' system-call if the file name contains a newline character.
+  ;; So svn-handle:directory-files should be changed accordingly.
+  (svn--list-child-with-cache directory nil match)
   )
 ;; (defun svn-handle:directory-file-name(directory)
 ;;   (svn-magic-file-name-to-url directory)
