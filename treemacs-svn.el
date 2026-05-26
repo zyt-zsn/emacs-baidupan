@@ -109,12 +109,13 @@
 
 
 ;;; Utility
-(defun svn-cmd(cmd-str url &optional xml coding-system-for-write)
+(defun svn-cmd(cmd-str url &optional xml coding-system-for-write coding-system-for-read)
   (let (
 		;; [[**  (bookmark--jump-via "("Lang Env set temporarily to Chinese" (filename . "~/config.org") (front-context-string . "B18030 temporari") (rear-context-string . "tch to Chinese-G") (position . 378774) (last-modified 26721 64992 904841 0) (defaults "config.org"))" 'switch-to-buffer-other-window)  **]]
 		;; 如果使用xml格式输出，需要将read编码设置为utf-8,否则设置为chinese-gb18030-dos
 		;; (coding-system-for-read (if xml 'utf-8 'chinese-gb18030-dos))
-		(coding-system-for-read 'utf-8)
+		(coding-system-for-read (or coding-system-for-read 'utf-8))
+		;; (coding-system-for-read 'chinese-gb18030-dos)
 		;; (coding-system-for-write 'utf-8)
 		;; 不要随意调整 coding-system-for-write, 会影响中文目录
 		(coding-system-for-write (or coding-system-for-write 'utf-8))
