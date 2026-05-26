@@ -1558,10 +1558,27 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
   ;; (ediff "/svn:zhangyuntong@192.168.0.6:/svn/tdr/readme.txt@64" "/svn:zhangyuntong@192.168.0.6:/svn/tdr/readme.txt@63")
   )
 
+(defun zyt/svn--detect-coding (raw)
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert raw)
+    (let* ((base (coding-system-base (car (detect-coding-region (point-min) (point-max))))))
+      (if (memq base '(chinese-gb18030 utf-8))
+          base
+        (let (valid)
+          (dolist (coding '(chinese-gb18030 utf-8))
+            (unless (string-match-p (string ?\xfffd) (decode-coding-string raw coding))
+              (push coding valid)))
+          (setq valid (nreverse valid))
+          (cond
+           ((= (length valid) 1) (car valid))
+           ((> (length valid) 1) 'chinese-gb18030)
+           (t (intern (completing-read "编码: " '(chinese-gb18030 utf-8) nil t nil nil 'chinese-gb18030)))))))))
+
 (defun zyt/svn-server--diff(relative-path revision)
-  (let* ((coding (intern (completing-read "编码: " '(chinese-gb18030 utf-8) nil t nil nil 'chinese-gb18030)))
-		 (url1 (svn-magic-file-name-to-url (substring-no-properties (concat (file-remote-p source-path) "/svn/tdr" relative-path "@" revision))))
+  (let* ((url1 (svn-magic-file-name-to-url (substring-no-properties (concat (file-remote-p source-path) "/svn/tdr" relative-path "@" revision))))
 		 (url2 (svn-magic-file-name-to-url (substring-no-properties (concat (file-remote-p source-path) "/svn/tdr" relative-path "@" (int-to-string (1- (string-to-number revision)))))))
+		 (coding (zyt/svn--detect-coding (svn-cmd "cat " url1 nil 'no-conversion 'no-conversion)))
 		 (buf1 (get-buffer-create url1))
 		 (buf2 (get-buffer-create url2))
 		 (src-path source-path))
