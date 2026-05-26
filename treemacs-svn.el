@@ -1099,25 +1099,16 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
   (condition-case err
       (let ((count 0) nf)
         (when (file-exists-p filename)
-		  (setq nf (file-local-copy filename))
+          (setq nf (file-local-copy filename))
           (unwind-protect
-			  (save-excursion
-				(if replace (erase-buffer))
-				(let (
-					  ;; (coding-system-for-read 'chinese-gb18030-dos)
-					  ;; (coding-system-for-read 'utf-8)
-					  ;; 服务器不同文件内容可能不同，无法唯一确定合适编码
-					  ;; 如显式设定为 'utf-8 or 'chinese-gb18030, 则后续无法通过 "C-x RET r"(revert-buffer-with-coding-system) 指定编码
-					  ;; 只有设置为 'no-conversion时，才可以通过 "C-x RET r" 指定编码
-					  (codint-system-for-read 'no-conversion)
-					  )
-				  (setq count (cdr (insert-file-contents nf nil _beg _end t))))
-				)
-            ;; (delete-file nf)
-			nil
-			)
-										;)
-		  )
+              (save-excursion
+                (if replace (erase-buffer))
+                (let ((coding-system-for-read 'no-conversion))
+                  (setq count (cdr (insert-file-contents nf nil _beg _end t)))
+                  (let ((coding (zyt/svn--detect-coding
+                                 (buffer-substring-no-properties (point-min) (point-max)))))
+                    (decode-coding-region (point-min) (point-max) coding))))
+            nil))
         (when visit
           (setf buffer-file-name filename)
           (setf buffer-read-only (not (file-writable-p filename)))
