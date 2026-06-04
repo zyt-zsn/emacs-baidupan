@@ -558,7 +558,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 											)))
            (file (cl-find-if (lambda (f) (string= (alist-get 'path f) path)) rs)))
       (when (and dlink? file (equal (alist-get 'isdir file) 0))
-        (when-let ((meta (dupan-req 'meta (alist-get 'fs_id file))))
+        (when-let* ((meta (dupan-req 'meta (alist-get 'fs_id file))))
 		  ;; (when-let ((meta (dupan-fetch-file-meta file (alist-get 'fs_id file))))
           (setf (alist-get 'dlink file) (alist-get 'dlink (car meta)))))
       file)))
@@ -1180,8 +1180,9 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
   (if (dupan-file-p dir)
       (cons 'transient dupan-prefix)
     (funcall fn dir)))
-
-(advice-add #'project--find-in-directory :around #'dupan-project--find-in-directory-advice)
+(with-eval-after-load 'project
+  (advice-add #'project--find-in-directory :around #'dupan-project--find-in-directory-advice)
+  )
 
 
 
