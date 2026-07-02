@@ -1739,7 +1739,7 @@ maybe request body not standard 的错误。莫名其妙，干脆自己拼得了
 	(--map
 	 (let (
 		   (author (dom-text (dom-by-tag it 'author)))
-		   (date (dom-text (dom-by-tag it 'date)))
+		   (date (format-time-string  "%Y/%m/%d %T" (encode-time(iso8601-parse (dom-text (dom-by-tag it 'date)))) "UTC-8"))
 		   (revision (dom-attr it 'revision))
 		   (messages
 			(string-split (dom-text (dom-by-tag it 'msg)) "[\n\r]+")
