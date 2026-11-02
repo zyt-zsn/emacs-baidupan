@@ -29,6 +29,7 @@
 (require 'dired-aux)
 (require 'dash)
 (require 'treemacs)
+(require 'ediff)
 ;; (require 'tramp)
 (require 'rx)
 (require 'dom)
